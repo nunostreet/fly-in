@@ -46,13 +46,13 @@ class MapParser:
             prefix, _, rest = stripped_line.partition(":")
 
             if prefix == "nb_drones":
-                parse_drones(rest.strip(), line_number, world)
+                self.parse_drones(rest.strip(), line_number, world)
 
             elif prefix in ("hub", "start_hub", "end_hub"):
-                parse_hub(rest.strip(), prefix, line_number, hub)
+                self.parse_hub(rest.strip(), prefix, line_number, hub)
 
             elif prefix == "connection":
-                parse_connection(rest.strip(), line_number, world)
+                self.parse_connection(rest.strip(), line_number, world)
 
             else:
                 raise ValueError(
@@ -60,6 +60,7 @@ class MapParser:
                     )
 
         return None  # temporary
+
 
     @staticmethod
     def parse_drones(rest: str, line_number: int, world: World):
@@ -84,10 +85,11 @@ class MapParser:
         hub.name = name
         hub.x = int(x)
         hub.y = int(y)
-        hub.metadata = _process_metadata(metadata)
+        hub.metadata = MapParser._process_metadata(metadata)
 
-
-    # def parse_connection(rest: str, line_number: int, world: World):
+    @staticmethod
+    def parse_connection(rest: str, line_number: int, world: World) -> None:
+        return None
 
 
     @staticmethod
