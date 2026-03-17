@@ -1,2 +1,6 @@
 .venv/
-.pycache
+__pycache__/
+*.pyc
+.mypy_cache/
+fly-in.pdf
+testing.py
