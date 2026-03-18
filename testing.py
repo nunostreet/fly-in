@@ -1,34 +1,26 @@
 # flake8: noqa
 
-def transform_to_dict(metadata: str) -> dict[str, str]:
-    if not metadata:
-        return {}
+from parser import MapParser
 
-    text = metadata.strip()
-    if not (text.startswith("[") and text.endswith("]")):
-        raise ValueError("Metadata must be enclosed in brackets")
+def test_map(path: str) -> None:
+    parser = MapParser()
 
-    content = text[1:-1].strip()
-    if not content:
-        return {}
-
-    result: dict[str, str] = {}
-
-    for pair in content.split():
-        if "=" not in pair:
-            raise ValueError(f"Invalid metadata pair: {pair}")
-
-        key, value = pair.split("=", 1)
-        if not key:
-            raise ValueError("Metadata key cannot be empty")
-
-        result[key] = value
-
-    return result
+    try:
+        world = parser.parse_file(path)
+        print(f"[OK] {path}")
+        print(world)
+    except Exception as exc:
+        print(f"[ERROR] {path}: {exc}")
 
 def main() -> None:
-    s: str = "[zone=restricted color=orange max_drones=3]"
-    print(transform_to_dict(s))
+    test_map("maps/easy/01_linear_path.txt")
+    print()
+    test_map("maps/easy/02_simple_fork.txt")
+    print()
+    test_map("maps/easy/03_basic_capacity.txt")
+    print()
+    help(ord)
+
 
 if __name__ == "__main__":
     main()
