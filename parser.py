@@ -67,7 +67,7 @@ class MapParser:
         return world
 
     @staticmethod
-    def parse_drones(rest: str, line_number: int, world: World):
+    def parse_drones(rest: str, line_number: int, world: World) -> None:
         """Parse the drone count line and store it in the ``World``.
 
         Args:
@@ -160,7 +160,9 @@ class MapParser:
             end=(prefix == "end_hub")
         )
 
-    def parse_connection(self, rest: str, line_number: int, world: World):
+    def parse_connection(
+            self, rest: str, line_number: int, world: World
+            ) -> None:
         """Parse a connection definition and add it to the ``World``.
 
         Args:

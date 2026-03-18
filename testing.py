@@ -19,7 +19,6 @@ def main() -> None:
     print()
     test_map("maps/easy/03_basic_capacity.txt")
     print()
-    help(ord)
 
 
 if __name__ == "__main__":
