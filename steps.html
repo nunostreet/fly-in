@@ -1,0 +1,76 @@
+<h2>O que e um grafo?</h2>
+<p>
+  Um grafo e uma estrutura que representa elementos ligados entre si.
+</p>
+<ul>
+  <li>Cada <code>Hub</code> e um no.</li>
+  <li>Cada <code>Connection</code> e uma ligacao entre nos.</li>
+</ul>
+<p>
+  No teu projeto, o mapa pode ser visto como um grafo onde queremos navegar do
+  <code>start_hub</code> ate ao <code>end_hub</code>.
+</p>
+
+<h2>Objetivo desta fase</h2>
+<p>
+  O objetivo agora nao e simular drones ainda. O objetivo e transformar o
+  <code>World</code> numa estrutura de navegacao e conseguir encontrar caminhos validos.
+</p>
+
+<h2>Checklist principal</h2>
+<ul>
+  <li>[ ] Converter o <code>World</code> num grafo.</li>
+  <li>[ ] Conseguir listar os vizinhos de cada hub.</li>
+  <li>[ ] Garantir que o <code>start_hub_name</code> e o <code>end_hub_name</code> existem no grafo.</li>
+  <li>[ ] Implementar uma busca de caminho simples.</li>
+  <li>[ ] Devolver um caminho como lista de hubs.</li>
+  <li>[ ] Testar com os mapas <code>easy</code>.</li>
+  <li>[ ] Validar o caso em que nao existe caminho.</li>
+</ul>
+
+<h2>Fase 1: Construir o grafo</h2>
+<ul>
+  <li>[ ] Criar uma adjacency list, por exemplo <code>dict[str, list[str]]</code>.</li>
+  <li>[ ] Inicializar uma entrada para cada hub do mundo.</li>
+  <li>[ ] Percorrer <code>world.connections</code>.</li>
+  <li>[ ] Adicionar <code>target</code> aos vizinhos de <code>source</code>.</li>
+  <li>[ ] Adicionar <code>source</code> aos vizinhos de <code>target</code>.</li>
+  <li>[ ] Evitar duplicados nas listas de vizinhos, se necessario.</li>
+</ul>
+
+<h2>Fase 2: Encontrar um caminho</h2>
+<ul>
+  <li>[ ] Escolher um algoritmo simples, idealmente <code>BFS</code>.</li>
+  <li>[ ] Comecar no <code>start_hub_name</code>.</li>
+  <li>[ ] Explorar os vizinhos nivel a nivel.</li>
+  <li>[ ] Marcar hubs visitados.</li>
+  <li>[ ] Guardar o hub anterior para reconstruir o caminho.</li>
+  <li>[ ] Parar quando encontrares o <code>end_hub_name</code>.</li>
+  <li>[ ] Reconstruir o caminho final do fim para o inicio.</li>
+</ul>
+
+<h2>Fase 3: Validar com testes</h2>
+<ul>
+  <li>[ ] Testar <code>01_linear_path</code> e confirmar o caminho esperado.</li>
+  <li>[ ] Testar <code>02_simple_fork</code> e confirmar que encontras um caminho valido.</li>
+  <li>[ ] Testar <code>03_basic_capacity</code> e confirmar que o parser + router funcionam juntos.</li>
+  <li>[ ] Criar um caso invalido sem caminho possivel.</li>
+  <li>[ ] Verificar o comportamento quando o destino nao e encontrado.</li>
+</ul>
+
+<h2>O que ainda nao precisas</h2>
+<ul>
+  <li>[ ] Nao precisas ainda de <code>Drone</code>.</li>
+  <li>[ ] Nao precisas ainda de simulacao temporal.</li>
+  <li>[ ] Nao precisas ainda de tratar prioridades, capacidades ou restricted zones a serio.</li>
+</ul>
+
+<h2>Resultado esperado desta fase</h2>
+<p>
+  No fim desta parte, deves conseguir pegar num <code>World</code> e responder:
+</p>
+<ul>
+  <li>Quais sao os vizinhos de um hub?</li>
+  <li>Existe caminho entre start e end?</li>
+  <li>Qual e um caminho valido?</li>
+</ul>
