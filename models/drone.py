@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-from .world import World
 
 
 @dataclass
 class Drone():
     id: int = 1
-    path_index: str | None = World.start_hub_name
+    path_index: int = 0
     finished: bool = False
