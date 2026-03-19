@@ -54,7 +54,6 @@ class SimulationEngine:
 
     def _move_drone(self, drone: Drone, path: list[str]) -> str | None:
 
-      
         return None
 
     def _all_finished(self, drones: list[Drone]) -> bool:
