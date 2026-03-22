@@ -13,4 +13,4 @@ class Connection:
 
     source: str
     target: str
-    metadata: dict[str, str]
+    max_link_capacity: int = 1

@@ -2,6 +2,7 @@ from pathlib import Path
 from models.world import World
 from models.hub import Hub
 from models.connection import Connection
+from models.zone import ZoneType
 
 
 class MapParser:
@@ -150,12 +151,34 @@ class MapParser:
         elif prefix == "end_hub":
             world.end_hub_name = name
 
+        allowed_metadata = {"zone", "color", "max_drones"}
+
+        for key in metadata:
+            if key not in allowed_metadata:
+                raise ValueError(
+                    f"Unknown hub metadata '{key}' at line {line_number}"
+                )
+
+        try:
+            max_drones = int(metadata.get("max_drones", 1))
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid max_drones value at line {line_number}"
+            ) from exc
+
+        if max_drones <= 0:
+            raise ValueError(
+                f"max_drones must be positive at line {line_number}"
+            )
+
         # Registering the hub in the world map
         world.hubs[name] = Hub(
             name=name,
             x=x_int,
             y=y_int,
-            metadata=metadata,
+            zone=ZoneType.NORMAL,
+            color=metadata.get("color", "none"),
+            max_drones=max_drones,
             start=(prefix == "start_hub"),
             end=(prefix == "end_hub")
         )
@@ -181,8 +204,7 @@ class MapParser:
                 )
 
         parts = rest.split(maxsplit=1)
-
-        processed_metadata: dict = {}
+        metadata: dict[str, str] = {}
 
         # Check there is metadata
         if parts[0].count("-") != 1:
@@ -190,12 +212,16 @@ class MapParser:
                     "Connection should be in origin-destiny format. "
                     f"Line: {line_number}"
                     )
+        if parts[0].count("-") != 1:
+            raise ValueError(
+                "Connection should be in origin-destiny format. "
+                f"Line: {line_number}"
+            )
+
+        origin, destiny = parts[0].split("-")
+
         if len(parts) > 1:
-            origin, destiny = parts[0].split("-")
-            processed_metadata = self._process_metadata(parts[1])
-        # In case we don't have metadata information for a specific connection
-        else:
-            origin, destiny = parts[0].split("-")
+            metadata = self._process_metadata(parts[1])
 
         if origin == destiny:
             raise ValueError(f"Self loops not allowed. Line: {line_number}")
@@ -217,6 +243,26 @@ class MapParser:
                 f"Destination hub '{destiny}' does not exist."
             )
 
+        allowed_metadata = {"max_link_capacity"}
+
+        for key in metadata:
+            if key not in allowed_metadata:
+                raise ValueError(
+                    f"Unknown conn. metadata '{key}' at line {line_number}"
+                )
+
+        try:
+            max_link_capacity = int(metadata.get("max_link_capacity", 1))
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid max_link_capacity value at line {line_number}"
+            ) from exc
+
+        if max_link_capacity <= 0:
+            raise ValueError(
+                f"max_link_capacity must be positive at line {line_number}"
+            )
+
         new_connection_key = self._connection_key(origin, destiny)
         existing_connection_keys = {
             self._connection_key(connection.source, connection.target)
@@ -229,7 +275,7 @@ class MapParser:
         world.connections.append(Connection(
             source=origin,
             target=destiny,
-            metadata=processed_metadata
+            max_link_capacity=max_link_capacity
             )
         )
 

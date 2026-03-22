@@ -1,4 +1,5 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from .zone import ZoneType
 
 
 @dataclass
@@ -17,6 +18,8 @@ class Hub:
     name: str = ""
     x: int = 0
     y: int = 0
-    metadata: dict[str, str] = field(default_factory=dict)
+    zone: ZoneType = ZoneType.NORMAL
+    color: str = "none"
+    max_drones: int = 1
     start: bool = False
     end: bool = False
