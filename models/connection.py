@@ -8,7 +8,8 @@ class Connection:
     Attributes:
         source: Name of the source hub.
         target: Name of the target hub.
-        metadata: Optional connection configuration from the map file.
+        max_link_capacity: Maximum number of drones that may traverse the
+            connection simultaneously.
     """
 
     source: str

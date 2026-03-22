@@ -9,7 +9,7 @@ class MapParser:
     """Parse Fly-in map files into validated world objects.
 
     The parser reads a map definition line by line, validates its structure,
-    and builds a "World" instance containing hubs, connections, and global
+    and builds a ``World`` instance containing hubs, connections, and global
     map settings.
     """
 
@@ -132,14 +132,8 @@ class MapParser:
         if name in world.hubs:
             raise ValueError(f"Duplicate hub at line {line_number}")
 
-        # Calling _process_metadata to transform str into dict
-        if r_parts:
-            if r_parts[0].startswith("[") and r_parts[0].endswith("]"):
-                metadata = self._process_metadata(r_parts[0])
-            else:
-                raise ValueError(f"Invalid metadata at line {line_number}")
-        else:
-            metadata = {}
+        if "-" in name:
+            raise ValueError(f"Hub names can't have '-' (line {line_number})")
 
         # The map must define at most one start hub and one end hub.
         if prefix == "start_hub" and world.start_hub_name is not None:
@@ -150,6 +144,15 @@ class MapParser:
             raise ValueError(f"Duplicate end_hub at line {line_number}")
         elif prefix == "end_hub":
             world.end_hub_name = name
+
+        # Parse the optional hub metadata block when present.
+        if r_parts:
+            if r_parts[0].startswith("[") and r_parts[0].endswith("]"):
+                metadata = self._process_metadata(r_parts[0])
+            else:
+                raise ValueError(f"Invalid metadata at line {line_number}")
+        else:
+            metadata = {}
 
         allowed_metadata = {"zone", "color", "max_drones"}
 
@@ -171,12 +174,19 @@ class MapParser:
                 f"max_drones must be positive at line {line_number}"
             )
 
-        # Registering the hub in the world map
+        try:
+            zone = ZoneType(metadata.get("zone", "normal"))
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid zone value at line {line_number}"
+            ) from exc
+
+        # Store the fully validated hub in the parsed world.
         world.hubs[name] = Hub(
             name=name,
             x=x_int,
             y=y_int,
-            zone=ZoneType.NORMAL,
+            zone=zone,
             color=metadata.get("color", "none"),
             max_drones=max_drones,
             start=(prefix == "start_hub"),
@@ -206,19 +216,18 @@ class MapParser:
         parts = rest.split(maxsplit=1)
         metadata: dict[str, str] = {}
 
-        # Check there is metadata
+        # Parse optional connection metadata after the ``origin-destiny`` part.
         if parts[0].count("-") != 1:
             raise ValueError(
                     "Connection should be in origin-destiny format. "
                     f"Line: {line_number}"
                     )
-        if parts[0].count("-") != 1:
-            raise ValueError(
-                "Connection should be in origin-destiny format. "
-                f"Line: {line_number}"
-            )
 
         origin, destiny = parts[0].split("-")
+
+        if not origin or not destiny:
+            raise ValueError("Connection origin and destination can't"
+                             f"be empty (line {line_number})")
 
         if len(parts) > 1:
             metadata = self._process_metadata(parts[1])
@@ -226,7 +235,7 @@ class MapParser:
         if origin == destiny:
             raise ValueError(f"Self loops not allowed. Line: {line_number}")
 
-        # Check the hubs already exist
+        # Connections may only reference hubs that were already defined.
         if origin not in world.hubs and destiny not in world.hubs:
             raise ValueError(
                 f"Invalid connection at line {line_number}. "
@@ -248,7 +257,8 @@ class MapParser:
         for key in metadata:
             if key not in allowed_metadata:
                 raise ValueError(
-                    f"Unknown conn. metadata '{key}' at line {line_number}"
+                    f"Unknown connection metadata '{key}'"
+                    f" at line {line_number}"
                 )
 
         try:
@@ -271,7 +281,7 @@ class MapParser:
         if new_connection_key in existing_connection_keys:
             raise ValueError(f"Duplicate connection at line {line_number}.")
 
-        # Adding connection to the world map
+        # Store the fully validated connection in the parsed world.
         world.connections.append(Connection(
             source=origin,
             target=destiny,
