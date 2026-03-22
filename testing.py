@@ -72,9 +72,9 @@ def test_group(title: str, paths: list[str]) -> None:
 
 def main() -> None:
     focused_maps = [
-        "maps/medium/01_dead_end_trap.txt",
-        "maps/medium/02_circular_loop.txt",
-        "maps/medium/03_priority_puzzle.txt"
+        "maps/test_blocked.txt",
+        "maps/test_restricted.txt",
+        "maps/test_priority.txt"
     ]
 
     test_group("=== FOCUSED MAPS ===", focused_maps)

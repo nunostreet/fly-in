@@ -44,7 +44,7 @@ class SimulationEngine:
         # Solution path with each hub from start to goal
         path = self._router.find_path(self._world)
         if not path:
-            return SimulationResult(turns=0, lines=[])
+            raise RuntimeError("No solution found")
 
         drones = self._init_drones()
         lines: list[str] = []

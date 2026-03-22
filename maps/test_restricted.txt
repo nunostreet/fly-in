@@ -1,0 +1,19 @@
+# maps/test_restricted.txt
+nb_drones: 1
+
+start_hub: start 0 0 [color=green]
+hub: restricted1 1 0 [zone=restricted color=red]
+hub: restricted2 2 0 [zone=restricted color=red]
+hub: safe1 1 1 [color=blue]
+hub: safe2 2 1 [color=blue]
+hub: safe3 3 1 [color=blue]
+end_hub: goal 3 0 [color=green]
+
+connection: start-restricted1
+connection: restricted1-restricted2
+connection: restricted2-goal
+
+connection: start-safe1
+connection: safe1-safe2
+connection: safe2-safe3
+connection: safe3-goal
