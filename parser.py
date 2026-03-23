@@ -90,7 +90,7 @@ class MapParser:
                 f"# of drones must be positive (line {line_number})"
                 )
 
-        if nb > 1000:
+        if nb > 1000:  # CHANGE!!
             raise ValueError(
                 f"# of drones must be less than 1000 (line {line_number})"
                 )

@@ -54,11 +54,11 @@ class SimulationEngine:
         turns = 0
 
         while not self._all_finished(drones):
-            turn_moves = self._run_turn(drones, path)
+            turn_moves, made_progress = self._run_turn(drones, path)
 
             if turn_moves:
                 lines.append(" ".join(turn_moves))
-            else:
+            elif not made_progress:
                 raise RuntimeError(
                     f"No drone could move this turn (turn: {turns})"
                 )
@@ -109,7 +109,9 @@ class SimulationEngine:
 
         return drones
 
-    def _run_turn(self, drones: list[Drone], path: list[str]) -> List[str]:
+    def _run_turn(
+            self, drones: list[Drone], path: list[str]
+            ) -> tuple[List[str], bool]:
         """Advance the simulation by one turn.
 
         Drones that were already traveling to a restricted hub are resolved
@@ -119,6 +121,7 @@ class SimulationEngine:
         """
 
         moves: list[str] = []
+        made_progress = False
 
         # Track how many drones have already used each connection this turn.
         link_usage: dict[tuple[str, str], int] = {}
@@ -139,6 +142,7 @@ class SimulationEngine:
             drone.next_hub = None
             drone.in_transit = False
             drone.path_index += 1
+            made_progress = True
 
             if drone.path_index == len(path) - 1:
                 drone.finished = True
@@ -150,18 +154,19 @@ class SimulationEngine:
             if drone.id in processed_ids or drone.finished or drone.in_transit:
                 continue
 
-            move = self._move_drone(drone, path, link_usage)
+            move, progressed = self._move_drone(drone, path, link_usage)
+            made_progress = made_progress or progressed
             if move is not None:
                 moves.append(move)
 
-        return moves
+        return moves, made_progress
 
     def _move_drone(
             self,
             drone: Drone,
             path: list[str],
             link_usage: dict[tuple[str, str], int]
-            ) -> str | None:
+            ) -> tuple[str | None, bool]:
         """Try to start moving a single drone toward the next hub in the path.
 
         The ``path_index`` points to the drone's current position in the
@@ -179,12 +184,12 @@ class SimulationEngine:
         # 1. Check if we reached the end
         if drone.path_index >= len(path) - 1:
             drone.finished = True
-            return None
+            return None, False
 
         # 2. Find where the drone is
         current_hub_name = drone.current_hub
         if current_hub_name is None:
-            return None
+            return None, False
 
         # 3. Find where it needs to go
         next_hub_name = path[drone.path_index + 1]
@@ -193,7 +198,7 @@ class SimulationEngine:
         # The drone must wait if the destination hub is already full.
         if self._hub_occupancy[next_hub_name] >= next_hub.max_drones:
             drone.waiting = True
-            return None
+            return None, False
 
         # The drone must also wait if too many drones already used this
         # connection during the current turn.
@@ -209,7 +214,7 @@ class SimulationEngine:
 
         if used_this_turn >= connection.max_link_capacity:
             drone.waiting = True
-            return None
+            return None, False
 
         self._hub_occupancy[current_hub_name] -= 1
         self._hub_occupancy[next_hub_name] += 1
@@ -221,7 +226,7 @@ class SimulationEngine:
             drone.in_transit = True
             drone.waiting = False
 
-            return None
+            return None, True
         else:
             drone.current_hub = next_hub_name
             drone.path_index += 1
@@ -230,7 +235,7 @@ class SimulationEngine:
             if drone.path_index == len(path) - 1:
                 drone.finished = True
 
-            return f"D{drone.id}-{next_hub_name}"
+            return f"D{drone.id}-{next_hub_name}", True
 
     @staticmethod
     def _connection_key(origin: str, destiny: str) -> tuple[str, str]:
