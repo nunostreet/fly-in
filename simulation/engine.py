@@ -256,3 +256,7 @@ class SimulationEngine:
         """Return ``True`` when every drone has reached the final hub."""
 
         return all(drone.finished for drone in drones)
+
+    def get_drones_snapshot(self, drones: list[Drone]) -> list[Drone]:
+        """Return a snapshot of the drones."""
+        return drones
