@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from models.world import World
 from models.drone import Drone
+from models.zone import ZoneType
 from routing.router import Router
 from typing import List
 
@@ -19,6 +20,8 @@ class SimulationEngine:
     The engine currently makes every drone follow the same path returned by
     the router. It tracks hub occupancy across turns and link usage within a
     single turn so that hub and connection capacities can block movement.
+    Moving into a restricted hub takes an extra turn, so drones may be marked
+    as in transit between turns before they arrive at the destination hub.
     """
 
     def __init__(self, world: World) -> None:
@@ -107,10 +110,12 @@ class SimulationEngine:
         return drones
 
     def _run_turn(self, drones: list[Drone], path: list[str]) -> List[str]:
-        """Advance each unfinished drone by one step along the path.
+        """Advance the simulation by one turn.
 
-        Each drone can move at most one hub per turn. The returned strings
-        are later joined into the output line for that turn.
+        Drones that were already traveling to a restricted hub are resolved
+        first. After that, drones that are idle may attempt to start a new
+        movement. The returned strings are joined into the output line for the
+        current turn.
         """
 
         moves: list[str] = []
@@ -118,8 +123,31 @@ class SimulationEngine:
         # Track how many drones have already used each connection this turn.
         link_usage: dict[tuple[str, str], int] = {}
 
+        # Track which drones have been moved that were in transit
+        processed_ids: set[int] = set()
+
+        # 1. We prioritise drones that were already in transit
         for drone in drones:
-            if drone.finished:
+            if not drone.in_transit:
+                continue
+
+            if drone.next_hub is None:
+                continue
+
+            next_hub_name = drone.next_hub
+            drone.current_hub = next_hub_name
+            drone.next_hub = None
+            drone.in_transit = False
+            drone.path_index += 1
+
+            if drone.path_index == len(path) - 1:
+                drone.finished = True
+
+            moves.append(f"D{drone.id}-{next_hub_name}")
+            processed_ids.add(drone.id)
+
+        for drone in drones:
+            if drone.id in processed_ids or drone.finished or drone.in_transit:
                 continue
 
             move = self._move_drone(drone, path, link_usage)
@@ -134,17 +162,18 @@ class SimulationEngine:
             path: list[str],
             link_usage: dict[tuple[str, str], int]
             ) -> str | None:
-        """Move a single drone to the next hub in the path.
+        """Try to start moving a single drone toward the next hub in the path.
 
         The ``path_index`` points to the drone's current position in the
-        shared path. Advancing by one means moving from the current hub to the
-        next hub for this turn only. A drone may be forced to wait if the next
-        hub is already full or if the connection has no remaining capacity in
-        the current turn.
+        shared path. A drone may be forced to wait if the next hub is already
+        full or if the connection has no remaining capacity in the current
+        turn. Entering a restricted hub begins a movement that only completes
+        in the following turn.
 
         Returns:
-            A formatted move like ``D1-junction`` when the drone advances, or
-            ``None`` when no movement is possible.
+            A formatted move like ``D1-junction`` when the drone arrives at a
+            hub in the current turn, or ``None`` when no completed arrival is
+            produced.
         """
 
         # 1. Check if we reached the end
@@ -173,7 +202,7 @@ class SimulationEngine:
 
         if connection is None:
             raise ValueError(
-                "No connection found between hubs"
+                "No connection found between hubs "
                 f"{current_hub_name} and {next_hub_name}")
 
         used_this_turn = link_usage.get(link_key, 0)
@@ -182,22 +211,26 @@ class SimulationEngine:
             drone.waiting = True
             return None
 
-        # The drone can move, so update turn-local link usage and global hub
-        # occupancy before storing its new position.
         self._hub_occupancy[current_hub_name] -= 1
         self._hub_occupancy[next_hub_name] += 1
         link_usage[link_key] = used_this_turn + 1
-        drone.waiting = False
 
-        # Persist the drone's new position in the shared path.
-        drone.current_hub = next_hub_name
-        drone.path_index += 1
+        if next_hub.zone == ZoneType.RESTRICTED and not drone.in_transit:
+            drone.current_hub = None
+            drone.next_hub = next_hub_name
+            drone.in_transit = True
+            drone.waiting = False
 
-        # 8. Mark as finished if it reached the end
-        if drone.path_index == len(path) - 1:
-            drone.finished = True
+            return None
+        else:
+            drone.current_hub = next_hub_name
+            drone.path_index += 1
+            drone.waiting = False
 
-        return f"D{drone.id}-{next_hub_name}"
+            if drone.path_index == len(path) - 1:
+                drone.finished = True
+
+            return f"D{drone.id}-{next_hub_name}"
 
     @staticmethod
     def _connection_key(origin: str, destiny: str) -> tuple[str, str]:
