@@ -1,5 +1,6 @@
 import pygame as pg
 from parser import MapParser
+from models.zone import ZoneType
 
 
 pg.init()
@@ -7,7 +8,7 @@ pg.init()
 # Set up the drawing window
 # Everything is viewed on a single user-created display
 # Display is created using .set_mode()
-screen = pg.display.set_mode([800, 600])
+screen = pg.display.set_mode([1200, 600])
 
 clock = pg.time.Clock()
 
@@ -32,10 +33,6 @@ while running:
 
     screen.fill((240, 240, 240))
 
-    for hub in world.hubs.values():
-        sx, sy = map_to_screen(hub.x, hub.y)
-        pg.draw.circle(screen, (50, 100, 220), (sx, sy), 20)
-
     for connection in world.connections:
         source_hub = world.hubs[connection.source]
         target_hub = world.hubs[connection.target]
@@ -44,6 +41,19 @@ while running:
         x2, y2 = map_to_screen(target_hub.x, target_hub.y)
 
         pg.draw.line(screen, (120, 120, 120), (x1, y1), (x2, y2), 3)
+
+    for hub in world.hubs.values():
+        sx, sy = map_to_screen(hub.x, hub.y)
+        if hub.start is True:
+            pg.draw.circle(screen, (0, 0, 255), (sx, sy), 20)
+        elif hub.end is True:
+            pg.draw.circle(screen, (0, 0, 255), (sx, sy), 20)
+        elif hub.zone == ZoneType.PRIORITY:
+            pg.draw.circle(screen, (255, 0, 0), (sx, sy), 20)
+        elif hub.zone == ZoneType.RESTRICTED:
+            pg.draw.circle(screen, (255, 250, 50), (sx, sy), 20)
+        else:
+            pg.draw.circle(screen, (0, 255, 0), (sx, sy), 20)
 
     # Flip the display
     pg.display.flip()
