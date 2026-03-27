@@ -52,9 +52,9 @@ def test_map(path: str) -> None:
         print("Path:")
         print(f"  {path_found}")
         print()
-
+        print(world.hubs.values())
         print("Simulation:")
-        print(f"  turns={result.turns}")
+        print(f"  turns={result.turns}\n")
         for line in result.lines:
             print(f"  {line}")
         print()
@@ -72,7 +72,7 @@ def test_group(title: str, paths: list[str]) -> None:
 
 def main() -> None:
     focused_maps = [
-        "maps/challenger/01_the_impossible_dream.txt"
+        "maps/easy/01_linear_path.txt"
     ]
 
     test_group("=== FOCUSED MAPS ===", focused_maps)

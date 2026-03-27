@@ -21,8 +21,8 @@ class Drone():
 
     id: int = 1
     current_hub: str | None = None
-    path_index: int = 0
     next_hub: str | None = None
+    path_index: int = 0
     waiting: bool = False
     in_transit: bool = False
     finished: bool = False

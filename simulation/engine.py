@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from models.world import World
 from models.drone import Drone
 from models.zone import ZoneType
@@ -12,6 +12,8 @@ class SimulationResult:
 
     turns: int
     lines: list[str]
+    snapshots: list[list[Drone]]
+    path: list[str]
 
 
 class SimulationEngine:
@@ -50,11 +52,14 @@ class SimulationEngine:
             raise RuntimeError("No solution found")
 
         drones = self._init_drones()
+        snapshots: list[list[Drone]] = []
         lines: list[str] = []
         turns = 0
 
+        snapshots.append(self._snapshot_drones(drones))
         while not self._all_finished(drones):
             turn_moves, made_progress = self._run_turn(drones, path)
+            snapshots.append(self._snapshot_drones(drones))
 
             if turn_moves:
                 lines.append(" ".join(turn_moves))
@@ -65,7 +70,12 @@ class SimulationEngine:
 
             turns += 1
 
-        return SimulationResult(turns=turns, lines=lines)
+        return SimulationResult(
+            turns=turns,
+            lines=lines,
+            snapshots=snapshots,
+            path=path
+            )
 
     def _init_drones(self) -> List[Drone]:
         """Create one drone instance per configured drone in the world.
@@ -217,10 +227,10 @@ class SimulationEngine:
             return None, False
 
         self._hub_occupancy[current_hub_name] -= 1
-        self._hub_occupancy[next_hub_name] += 1
         link_usage[link_key] = used_this_turn + 1
 
-        if next_hub.zone == ZoneType.RESTRICTED and not drone.in_transit:
+        is_onstandby = not drone.in_transit
+        if next_hub.zone == ZoneType.RESTRICTED and is_onstandby:
             drone.current_hub = None
             drone.next_hub = next_hub_name
             drone.in_transit = True
@@ -228,6 +238,7 @@ class SimulationEngine:
 
             return None, True
         else:
+            self._hub_occupancy[next_hub_name] += 1
             drone.current_hub = next_hub_name
             drone.path_index += 1
             drone.waiting = False
@@ -257,6 +268,6 @@ class SimulationEngine:
 
         return all(drone.finished for drone in drones)
 
-    def get_drones_snapshot(self, drones: list[Drone]) -> list[Drone]:
-        """Return a snapshot of the drones."""
-        return drones
+    def _snapshot_drones(self, drones: list[Drone]) -> list[Drone]:
+        """Return a detached copy of the current drone states."""
+        return [replace(drone) for drone in drones]
