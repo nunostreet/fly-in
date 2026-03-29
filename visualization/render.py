@@ -508,6 +508,7 @@ class RenderApp:
             sx, sy = self.map_to_screen(hub.x, hub.y)
 
             hub_rect = pg.Rect(sx - 25, sy - 25, 50, 50)
+            # Test if two triangles overlap
             if rect.colliderect(hub_rect):
                 return True
 
