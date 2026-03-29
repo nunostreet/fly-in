@@ -167,14 +167,12 @@ class RenderApp:
         self.is_paused = False
 
     def step_forward(self) -> None:
-        # Manual stepping pauses playback so the chosen snapshot stays visible.
         self.is_paused = True
         if self.current_turn < len(self.snapshots) - 1:
             self.current_turn += 1
             self.turn_progress = 0.0
 
     def step_backward(self) -> None:
-        # Manual stepping pauses playback so the chosen snapshot stays visible.
         self.is_paused = True
         if self.current_turn > 0:
             self.current_turn -= 1
@@ -263,7 +261,7 @@ class RenderApp:
                 sprite = self.drone_sprite
             else:
                 # Re-scale only when the legend or another caller needs
-                # a different size than the default in-map sprite.
+                # a different size than the default in-map sprite
                 sprite = pg.transform.smoothscale(
                     self.drone_sprite,
                     (size, size),
@@ -287,7 +285,7 @@ class RenderApp:
         converts two consecutive drone states into a drawable position.
         """
         if current_drone.in_transit and current_drone.next_hub is not None:
-            # Interpolate along the active edge while the drone is moving.
+            # Interpolate along the active edge while the drone is moving
             origin_name = self.path[current_drone.path_index]
             origin_hub = self.world.hubs[origin_name]
             target_hub = self.world.hubs[current_drone.next_hub]
@@ -307,7 +305,7 @@ class RenderApp:
         else:
             return 0.0, 0.0
 
-        # No visible hub change between these two snapshots: drone is waiting.
+        # No visible hub change between these two snapshots: drone is waiting
         if (
             next_drone.current_hub is None
             or next_drone.current_hub == current_drone.current_hub
@@ -355,7 +353,7 @@ class RenderApp:
         """Draw markers for priority, restricted and blocked hubs."""
         for hub in self.world.hubs.values():
             sx, sy = self.map_to_screen(hub.x, hub.y)
-            # Offset the badge so it stays readable without covering the hub.
+            # Offset the badge so it stays readable without covering the hub
             marker_center = (sx + 15, sy - 15)
 
             if hub.zone == ZoneType.PRIORITY:
@@ -402,7 +400,7 @@ class RenderApp:
         next_snapshot = self.snapshots[self.current_turn + 1]
 
         for current_drone, next_drone in zip(current_snapshot, next_snapshot):
-            # Blend between consecutive snapshots for smoother animation.
+            # Blend between consecutive snapshots for smoother animation
             x, y = self.get_drone_position(current_drone, next_drone)
             sx, sy = self.map_to_screen(x, y)
             self.draw_drone((sx, sy))
@@ -435,7 +433,7 @@ class RenderApp:
             )
 
         entries = [
-            # Reuse the same visual language as the map markers.
+            # Reuse the same visual language as the map markers
             (
                 "Priority",
                 "marker",
@@ -491,14 +489,14 @@ class RenderApp:
         self.screen.blit(status_label, (legend_x + 10, y + 25))
 
         controls_label = self.legend_font.render(
-            "Space pause | R reset",
+            "Space: pause | R: reset",
             True,
             (0, 0, 0),
         )
         self.screen.blit(controls_label, (legend_x + 10, y + 45))
 
         step_label = self.legend_font.render(
-            "Left/Right step",
+            "Left arrow (previous) / Right arrow (next)",
             True,
             (0, 0, 0),
         )
@@ -547,7 +545,7 @@ class RenderApp:
             if not self.legend_overlaps_hubs(rect):
                 return rect
 
-        # Fall back to the first corner if every candidate overlaps.
+        # Fall back to the first corner if every candidate overlaps
         return candidates[0]
 
     def draw(self) -> None:
