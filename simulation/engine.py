@@ -110,13 +110,6 @@ class SimulationEngine:
         # Record number of drones initially
         self._hub_occupancy[start_hub_name] = nb_drones
 
-        # Update max drones for both start and end hubs,
-        # which have no restrictions
-        start_hub = self._world.hubs[start_hub_name]
-        start_hub.max_drones = nb_drones
-        end_hub = self._world.hubs[end_hub_name]
-        end_hub.max_drones = nb_drones
-
         return drones
 
     def _run_turn(
@@ -206,7 +199,8 @@ class SimulationEngine:
         next_hub = self._world.hubs[next_hub_name]
 
         # The drone must wait if the destination hub is already full.
-        if self._hub_occupancy[next_hub_name] >= next_hub.max_drones:
+        next_capacity = self._hub_capacity(next_hub_name)
+        if self._hub_occupancy[next_hub_name] >= next_capacity:
             drone.waiting = True
             return None, False
 
@@ -235,8 +229,11 @@ class SimulationEngine:
             drone.next_hub = next_hub_name
             drone.in_transit = True
             drone.waiting = False
+            connection_name = self._connection_name(
+                current_hub_name, next_hub_name
+                )
 
-            return None, True
+            return f"D{drone.id}-{connection_name}", True
         else:
             self._hub_occupancy[next_hub_name] += 1
             drone.current_hub = next_hub_name
@@ -262,6 +259,29 @@ class SimulationEngine:
         """
         first, second = sorted((origin, destiny))
         return first, second
+
+    def _connection_name(self, origin: str, destiny: str) -> str:
+        """Return a string indicating the drone movement.
+
+        Args:
+            origin: Name of the source hub.
+            destiny: Name of the destination hub.
+        """
+        return f"{origin}-{destiny}"
+
+    def _hub_capacity(self, hub_name: str) -> int:
+        """Return the effective capacity for a hub during simulation.
+
+        The start and end hubs may hold all drones, while every other hub
+        uses the capacity declared in the parsed map.
+        """
+        if (
+            hub_name == self._world.start_hub_name
+            or hub_name == self._world.end_hub_name
+        ):
+            return self._world.nb_drones or 0
+
+        return self._world.hubs[hub_name].max_drones
 
     def _all_finished(self, drones: list[Drone]) -> bool:
         """Return ``True`` when every drone has reached the final hub."""
