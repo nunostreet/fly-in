@@ -87,9 +87,9 @@ class RenderApp:
         hubs = list(self.world.hubs.values())
 
         if not hubs:
-            self.scale = 1
-            self.offset_x = 0
-            self.offset_y = 0
+            self.scale = 1.0
+            self.offset_x = 0.0
+            self.offset_y = 0.0
             return
 
         # Create list of x and y values for map dimensions
@@ -116,14 +116,16 @@ class RenderApp:
         usable_height = screen_height - 2 * padding
 
         # Horizontal scale
+        scale_x: float
         if world_width == 0:
-            scale_x = usable_width
+            scale_x = float(usable_width)
         else:
             scale_x = usable_width / world_width
 
         # Vertical scale
+        scale_y: float
         if world_height == 0:
-            scale_y = usable_height
+            scale_y = float(usable_height)
         else:
             scale_y = usable_height / world_height
 
@@ -436,40 +438,37 @@ class RenderApp:
             # Reuse the same visual language as the map markers
             (
                 "Priority",
-                "marker",
                 ("P", self.get_rgb_color("white"), self.get_rgb_color("cyan")),
             ),
             (
                 "Restricted",
-                "marker",
                 ("R", self.get_rgb_color("black"), self.get_rgb_color("red")),
             ),
-            ("Blocked", "marker", ("B", (60, 60, 60), (255, 255, 255))),
-            ("Drone", "drone", None),
+            ("Blocked", ("B", (60, 60, 60), (255, 255, 255))),
         ]
 
         title = self.legend_font.render("Legend", True, (0, 0, 0))
         self.screen.blit(title, (legend_x + 10, legend_y + 10))
 
         y = legend_y + 35
-        for text, entry_type, value in entries:
-            if entry_type == "color":
-                pg.draw.circle(self.screen, value, (legend_x + 15, y + 6), 6)
-            elif entry_type == "drone":
-                self.draw_drone((legend_x + 15, y + 6), size=18)
-            else:
-                marker_text, bg_color, text_color = value
-                self.draw_marker(
-                    (legend_x + 15, y + 6),
-                    marker_text,
-                    bg_color,
-                    text_color,
-                    radius=8,
-                )
+        for text, value in entries:
+            marker_text, bg_color, text_color = value
+            self.draw_marker(
+                (legend_x + 15, y + 6),
+                marker_text,
+                bg_color,
+                text_color,
+                radius=8,
+            )
 
             label = self.legend_font.render(text, True, (0, 0, 0))
             self.screen.blit(label, (legend_x + 30, y))
             y += 22
+
+        self.draw_drone((legend_x + 15, y + 6), size=18)
+        label = self.legend_font.render("Drone", True, (0, 0, 0))
+        self.screen.blit(label, (legend_x + 30, y))
+        y += 22
 
         y += 8
 

@@ -145,6 +145,7 @@ class SimulationEngine:
             drone.next_hub = None
             drone.in_transit = False
             drone.path_index += 1
+            self._hub_occupancy[next_hub_name] += 1
             made_progress = True
 
             if drone.path_index == len(path) - 1:

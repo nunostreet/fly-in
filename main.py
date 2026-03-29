@@ -1,8 +1,8 @@
 import argparse
+import sys
 
 from parser import MapParser
 from simulation.engine import SimulationEngine
-from visualization.render import RenderApp
 
 
 def main() -> None:
@@ -13,6 +13,8 @@ def main() -> None:
 
     try:
         if args.run_viz:
+            from visualization.render import RenderApp
+
             app = RenderApp(args.map_file)
             app.run()
             return
@@ -25,6 +27,7 @@ def main() -> None:
 
     except Exception as exc:
         print(f"Error: {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
