@@ -1,81 +1,30 @@
-# flake8: noqa
+import argparse
 
 from parser import MapParser
-from routing.router import Router
 from simulation.engine import SimulationEngine
-
-
-def test_map(path: str) -> None:
-    parser = MapParser()
-    router = Router()
-
-    try:
-        world = parser.parse_file(path)
-        graph = router.build_graph(world)
-        path_found = router.find_path(world)
-        result = SimulationEngine(world).run()
-
-        print(f"[OK] {path}")
-        print("World:")
-        print(
-            f"  nb_drones={world.nb_drones} "
-            f"start={world.start_hub_name} end={world.end_hub_name}"
-        )
-        print(
-            f"  total_hubs={len(world.hubs)} "
-            f"total_connections={len(world.connections)}"
-        )
-        print()
-
-        print("Hubs:")
-        for hub_name, hub in world.hubs.items():
-            print(
-                f"  {hub_name}: x={hub.x} y={hub.y} "
-                f"zone={hub.zone} color={hub.color} "
-                f"max_drones={hub.max_drones} "
-                f"start={hub.start} end={hub.end}"
-            )
-        print()
-
-        print("Connections:")
-        for connection in world.connections:
-            print(
-                f"  {connection.source} <-> {connection.target} "
-                f"max_link_capacity={connection.max_link_capacity}"
-            )
-        print()
-
-        print("Graph:")
-        print(f"  {graph}")
-        print()
-
-        print("Path:")
-        print(f"  {path_found}")
-        print()
-        print(world.hubs.values())
-        print("Simulation:")
-        print(f"  turns={result.turns}\n")
-        for line in result.lines:
-            print(f"  {line}")
-        print()
-
-    except Exception as exc:
-        print(f"[ERROR] {path}: {exc}")
-
-
-def test_group(title: str, paths: list[str]) -> None:
-    print(title)
-    for path in paths:
-        test_map(path)
-    print()
+from visualization.render import RenderApp
 
 
 def main() -> None:
-    focused_maps = [
-        "maps/easy/01_linear_path.txt"
-    ]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("map_file")
+    parser.add_argument("--run-viz", action="store_true")
+    args = parser.parse_args()
 
-    test_group("=== FOCUSED MAPS ===", focused_maps)
+    try:
+        if args.run_viz:
+            app = RenderApp(args.map_file)
+            app.run()
+            return
+
+        world = MapParser().parse_file(args.map_file)
+        result = SimulationEngine(world).run()
+
+        for line in result.lines:
+            print(line)
+
+    except Exception as exc:
+        print(f"Error: {exc}")
 
 
 if __name__ == "__main__":

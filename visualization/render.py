@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pygame as pg
 from models.drone import Drone
 from models.zone import ZoneType
@@ -8,7 +10,7 @@ from simulation.engine import SimulationEngine
 class RenderApp:
     """Open a Pygame window and render the parsed world map."""
 
-    def __init__(self) -> None:
+    def __init__(self, map_path: str) -> None:
         """Initialize Pygame, load the map, and store render settings."""
         # 1. Initialize the game
         pg.init()
@@ -21,9 +23,7 @@ class RenderApp:
         self.clock = pg.time.Clock()
 
         # 4. Load map
-        self.world = MapParser().parse_file(
-            "maps/challenger/01_the_impossible_dream.txt"
-            )
+        self.world = MapParser().parse_file(map_path)
 
         # 5. Save configs
         self.fit_world_to_screen()
@@ -34,6 +34,7 @@ class RenderApp:
         self.snapshots = self.result.snapshots
         self.path = self.result.path
 
+        self.is_paused = False
         self.current_turn = 0
         self.turn_progress = 0.0
         self.turn_speed = 0.02
@@ -42,7 +43,44 @@ class RenderApp:
         self.running = True
 
         # 8. Creating font for labels
-        self.font = pg.font.Font(None, 12)
+        self.label_font = pg.font.Font(None, 12)
+        self.legend_font = pg.font.Font(None, 12)
+        self.marker_font = pg.font.Font(None, 12)
+
+        # 9. Background image
+        self.background = self.load_background()
+        self.drone_sprite = self.load_drone_sprite()
+
+    def load_background(self) -> pg.Surface | None:
+        """Load and scale the background image to the window size."""
+        background_path = Path(__file__).resolve().parent.parent.joinpath(
+            "assets",
+            "terrain.jpeg",
+        )
+
+        # If background doesn't exist
+        if not background_path.exists():
+            return None
+
+        background = pg.image.load(str(background_path)).convert()
+        return pg.transform.scale(background, self.screen.get_size())
+
+    def load_drone_sprite(self) -> pg.Surface | None:
+        """Load and scale the drone image used on the map."""
+        drone_path = Path(__file__).resolve().parent.parent.joinpath(
+            "assets",
+            "drone.png",
+        )
+
+        # If drone sprite doesn't exist
+        if not drone_path.exists():
+            return None
+
+        # Creates a new copy of the surface with the desired pixel format
+        # The new surface will be in a format suited for quick blitting to
+        # the given format with per pixel alpha.
+        drone_image = pg.image.load(str(drone_path)).convert_alpha()
+        return pg.transform.smoothscale(drone_image, (30, 30))
 
     def fit_world_to_screen(self) -> None:
         """Calculate scale and offsets so the full map fits the window."""
@@ -54,30 +92,36 @@ class RenderApp:
             self.offset_y = 0
             return
 
+        # Create list of x and y values for map dimensions
         x_values = [hub.x for hub in hubs]
         y_values = [hub.y for hub in hubs]
 
+        # Get min/max x and y values
         min_x = min(x_values)
         max_x = max(x_values)
         min_y = min(y_values)
         max_y = max(y_values)
 
+        # Checking size for world width / height
         world_width = max_x - min_x
         world_height = max_y - min_y
 
         screen_width = self.screen.get_width()
         screen_height = self.screen.get_height()
 
+        # Extra space for borders
         padding = 80
 
         usable_width = screen_width - 2 * padding
         usable_height = screen_height - 2 * padding
 
+        # Horizontal scale
         if world_width == 0:
             scale_x = usable_width
         else:
             scale_x = usable_width / world_width
 
+        # Vertical scale
         if world_height == 0:
             scale_y = usable_height
         else:
@@ -85,6 +129,7 @@ class RenderApp:
 
         self.scale = min(scale_x, scale_y)
 
+        # Calculate the center of the map
         center_x = (min_x + max_x) / 2
         center_y = (min_y + max_y) / 2
 
@@ -103,8 +148,43 @@ class RenderApp:
             if event.type == pg.QUIT:
                 self.running = False
 
+            elif event.type == pg.KEYDOWN:
+                if event.key == pg.K_SPACE:
+                    self.toggle_pause()
+                elif event.key == pg.K_r:
+                    self.reset_animation()
+                elif event.key == pg.K_RIGHT:
+                    self.step_forward()
+                elif event.key == pg.K_LEFT:
+                    self.step_backward()
+
+    def toggle_pause(self) -> None:
+        self.is_paused = not self.is_paused
+
+    def reset_animation(self) -> None:
+        self.current_turn = 0
+        self.turn_progress = 0.0
+        self.is_paused = False
+
+    def step_forward(self) -> None:
+        # Manual stepping pauses playback so the chosen snapshot stays visible.
+        self.is_paused = True
+        if self.current_turn < len(self.snapshots) - 1:
+            self.current_turn += 1
+            self.turn_progress = 0.0
+
+    def step_backward(self) -> None:
+        # Manual stepping pauses playback so the chosen snapshot stays visible.
+        self.is_paused = True
+        if self.current_turn > 0:
+            self.current_turn -= 1
+            self.turn_progress = 0.0
+
     def update(self) -> None:
         """Advance the visual animation between simulation snapshots."""
+        if self.is_paused:
+            return
+
         if self.current_turn >= len(self.snapshots) - 1:
             return
 
@@ -114,42 +194,87 @@ class RenderApp:
             self.turn_progress = 0.0
             self.current_turn += 1
 
-    def draw_hubs(self) -> None:
-        """Draw every hub from the parsed world onto the screen."""
-        for hub in self.world.hubs.values():
-            pg.draw.circle(
-                self.screen,
-                self.get_rgb_color(hub.color),
-                self.map_to_screen(hub.x, hub.y),
-                20)
-
     def get_rgb_color(self, color_name: str) -> tuple[int, int, int]:
         """Translate a color name from the map file into an RGB tuple."""
         color_map = {
-            "none": (0, 255, 0),
-            "blue": (0, 0, 255),
-            "red": (255, 0, 0),
-            "green": (0, 255, 0),
-            "yellow": (255, 250, 50),
+            "red": (255, 80, 80),
+            "green": (80, 220, 120),
+            "blue": (90, 150, 255),
+            "cyan": (70, 210, 210),
+            "yellow": (255, 210, 70),
             "white": (255, 255, 255),
-            "black": (0, 0, 0),
-            "orange": (255, 165, 0),
-            "cyan": (0, 255, 255),
-            "brown": (150, 75, 0),
-            "maroon": (128, 0, 0)
+            "purple": (180, 100, 255),
+            "black": (200, 200, 210),
+            "brown": (200, 130, 70),
+            "orange": (255, 140, 50),
+            "maroon": (180, 60, 90),
+            "gold": (255, 200, 50),
+            "darkred": (200, 50, 50),
+            "violet": (200, 100, 220),
+            "crimson": (240, 60, 80),
         }
         return color_map.get(color_name.lower(), (0, 255, 0))
 
-    def draw_connections(self) -> None:
-        """Draw every connection between hubs as a line."""
-        for connection in self.world.connections:
-            source_hub = self.world.hubs[connection.source]
-            target_hub = self.world.hubs[connection.target]
+    def draw_marker(
+            self,
+            center: tuple[float, float],
+            text: str,
+            background_color: tuple[int, int, int],
+            text_color: tuple[int, int, int],
+            radius: int = 8
+            ) -> None:
+        """Draw a small circular marker with centered text."""
+        cx, cy = int(center[0]), int(center[1])
+        pg.draw.circle(self.screen, background_color, (cx, cy), radius)
 
-            x1, y1 = self.map_to_screen(source_hub.x, source_hub.y)
-            x2, y2 = self.map_to_screen(target_hub.x, target_hub.y)
+        label = self.marker_font.render(text, True, text_color)
+        label_rect = label.get_rect(center=(cx, cy))
+        self.screen.blit(label, label_rect)
 
-            pg.draw.line(self.screen, (120, 120, 120), (x1, y1), (x2, y2), 3)
+    def draw_rainbow_hub(
+            self,
+            center: tuple[float, float],
+            radius: int
+            ) -> None:
+        """Draw a circular hub with concentric rainbow-colored rings."""
+        rainbow_colors = [
+            (255, 0, 0),
+            (255, 127, 0),
+            (255, 255, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (75, 0, 130),
+            (148, 0, 211),
+        ]
+
+        cx, cy = int(center[0]), int(center[1])
+        total_colors = len(rainbow_colors)
+
+        for index, color in enumerate(rainbow_colors):
+            current_radius = radius - (index * radius) // total_colors
+            pg.draw.circle(self.screen, color, (cx, cy), current_radius)
+
+    def draw_drone(self, center: tuple[float, float], size: int = 30) -> None:
+        """Draw a drone sprite centered on the given map position."""
+        cx, cy = int(center[0]), int(center[1])
+
+        if self.drone_sprite is not None:
+            if self.drone_sprite.get_size() == (size, size):
+                sprite = self.drone_sprite
+            else:
+                # Re-scale only when the legend or another caller needs
+                # a different size than the default in-map sprite.
+                sprite = pg.transform.smoothscale(
+                    self.drone_sprite,
+                    (size, size),
+                )
+
+            sprite_rect = sprite.get_rect(center=(cx, cy))
+            self.screen.blit(sprite, sprite_rect)
+            return
+
+        pg.draw.circle(self.screen, (255, 255, 255), (cx, cy), size // 2)
+        pg.draw.circle(self.screen, (200, 80, 120), (cx, cy), size // 3)
 
     def get_drone_position(
             self,
@@ -162,6 +287,7 @@ class RenderApp:
         converts two consecutive drone states into a drawable position.
         """
         if current_drone.in_transit and current_drone.next_hub is not None:
+            # Interpolate along the active edge while the drone is moving.
             origin_name = self.path[current_drone.path_index]
             origin_hub = self.world.hubs[origin_name]
             target_hub = self.world.hubs[current_drone.next_hub]
@@ -198,12 +324,66 @@ class RenderApp:
         y = start_y + (end_hub.y - start_y) * self.turn_progress
         return x, y
 
+    def draw_connections(self) -> None:
+        """Draw every connection between hubs as a line."""
+        for connection in self.world.connections:
+            source_hub = self.world.hubs[connection.source]
+            target_hub = self.world.hubs[connection.target]
+
+            x1, y1 = self.map_to_screen(source_hub.x, source_hub.y)
+            x2, y2 = self.map_to_screen(target_hub.x, target_hub.y)
+
+            pg.draw.line(self.screen, (120, 120, 120), (x1, y1), (x2, y2), 3)
+
+    def draw_hubs(self) -> None:
+        """Draw every hub from the parsed world onto the screen."""
+        for hub in self.world.hubs.values():
+            center = self.map_to_screen(hub.x, hub.y)
+
+            if hub.color.lower() == "rainbow":
+                self.draw_rainbow_hub(center, 20)
+                continue
+
+            pg.draw.circle(
+                self.screen,
+                self.get_rgb_color(hub.color),
+                center,
+                20,
+            )
+
+    def draw_zone_markers(self) -> None:
+        """Draw markers for priority, restricted and blocked hubs."""
+        for hub in self.world.hubs.values():
+            sx, sy = self.map_to_screen(hub.x, hub.y)
+            # Offset the badge so it stays readable without covering the hub.
+            marker_center = (sx + 15, sy - 15)
+
+            if hub.zone == ZoneType.PRIORITY:
+                self.draw_marker(
+                    marker_center,
+                    "P",
+                    self.get_rgb_color("white"),
+                    self.get_rgb_color("cyan"),
+                )
+            elif hub.zone == ZoneType.RESTRICTED:
+                self.draw_marker(
+                    marker_center,
+                    "R",
+                    self.get_rgb_color("black"),
+                    self.get_rgb_color("red"),
+                )
+            elif hub.zone == ZoneType.BLOCKED:
+                self.draw_marker(
+                    marker_center,
+                    "B",
+                    (60, 60, 60),
+                    (255, 255, 255),
+                )
+
     def draw_drones(self) -> None:
         """Draw every drone using the current engine snapshots."""
         if not self.snapshots:
             return
-
-        color = (200, 80, 120)
 
         if self.current_turn >= len(self.snapshots) - 1:
             final_snapshot = self.snapshots[-1]
@@ -215,22 +395,23 @@ class RenderApp:
 
                 hub = self.world.hubs[hub_name]
                 sx, sy = self.map_to_screen(hub.x, hub.y)
-                pg.draw.circle(self.screen, color, (int(sx), int(sy)), 10)
+                self.draw_drone((sx, sy))
             return
 
         current_snapshot = self.snapshots[self.current_turn]
         next_snapshot = self.snapshots[self.current_turn + 1]
 
         for current_drone, next_drone in zip(current_snapshot, next_snapshot):
+            # Blend between consecutive snapshots for smoother animation.
             x, y = self.get_drone_position(current_drone, next_drone)
             sx, sy = self.map_to_screen(x, y)
-            pg.draw.circle(self.screen, color, (int(sx), int(sy)), 10)
+            self.draw_drone((sx, sy))
 
     def draw_hub_labels(self) -> None:
         """Draw the name of each hub next to its circle."""
         for hub in self.world.hubs.values():
             sx, sy = self.map_to_screen(hub.x, hub.y)
-            label = self.font.render(hub.name, True, (0, 0, 0))
+            label = self.label_font.render(hub.name, True, (0, 0, 0))
             self.screen.blit(label, (sx - 25, sy - 35))
 
     def draw_legend(self) -> None:
@@ -238,8 +419,8 @@ class RenderApp:
         rect = self.get_legend_rect()
         legend_x = rect.x
         legend_y = rect.y
-        legend_width = 220
-        legend_height = 170
+        legend_width = 190
+        legend_height = 220
 
         pg.draw.rect(
             self.screen,
@@ -254,35 +435,74 @@ class RenderApp:
             )
 
         entries = [
-            ("Normal hub", (0, 255, 0)),
-            ("Priority hub", (0, 255, 255)),
-            ("Restricted hub", (255, 0, 0)),
-            ("Drone", (200, 80, 120)),
+            # Reuse the same visual language as the map markers.
+            (
+                "Priority",
+                "marker",
+                ("P", self.get_rgb_color("white"), self.get_rgb_color("cyan")),
+            ),
+            (
+                "Restricted",
+                "marker",
+                ("R", self.get_rgb_color("black"), self.get_rgb_color("red")),
+            ),
+            ("Blocked", "marker", ("B", (60, 60, 60), (255, 255, 255))),
+            ("Drone", "drone", None),
         ]
 
-        title = self.font.render("Legend", True, (0, 0, 0))
+        title = self.legend_font.render("Legend", True, (0, 0, 0))
         self.screen.blit(title, (legend_x + 10, legend_y + 10))
 
         y = legend_y + 35
-        for text, color in entries:
-            pg.draw.circle(self.screen, color, (legend_x + 15, y + 6), 6)
-            label = self.font.render(text, True, (0, 0, 0))
-            self.screen.blit(label, (legend_x + 30, y))
-            y += 25
+        for text, entry_type, value in entries:
+            if entry_type == "color":
+                pg.draw.circle(self.screen, value, (legend_x + 15, y + 6), 6)
+            elif entry_type == "drone":
+                self.draw_drone((legend_x + 15, y + 6), size=18)
+            else:
+                marker_text, bg_color, text_color = value
+                self.draw_marker(
+                    (legend_x + 15, y + 6),
+                    marker_text,
+                    bg_color,
+                    text_color,
+                    radius=8,
+                )
 
-        turn_label = self.font.render(
+            label = self.legend_font.render(text, True, (0, 0, 0))
+            self.screen.blit(label, (legend_x + 30, y))
+            y += 22
+
+        y += 8
+
+        turn_label = self.legend_font.render(
             f"Turn: {self.current_turn}/{self.result.turns}",
             True,
             (0, 0, 0),
         )
         self.screen.blit(turn_label, (legend_x + 10, y + 5))
 
-        # Marker for RESTRICTED hubs
-        for hub in self.world.hubs.values():
-            if hub.zone == ZoneType.RESTRICTED:
-                sx, sy = self.map_to_screen(hub.x, hub.y)
-                label = self.font.render("R", True, (255, 255, 255))
-                self.screen.blit(label, (sx - 2, sy - 2))
+        status = "Paused" if self.is_paused else "Playing"
+        status_label = self.legend_font.render(
+            f"Status: {status}",
+            True,
+            (0, 0, 0),
+        )
+        self.screen.blit(status_label, (legend_x + 10, y + 25))
+
+        controls_label = self.legend_font.render(
+            "Space pause | R reset",
+            True,
+            (0, 0, 0),
+        )
+        self.screen.blit(controls_label, (legend_x + 10, y + 45))
+
+        step_label = self.legend_font.render(
+            "Left/Right step",
+            True,
+            (0, 0, 0),
+        )
+        self.screen.blit(step_label, (legend_x + 10, y + 65))
 
     def legend_overlaps_hubs(self, rect: pg.Rect) -> bool:
         """Return whether the legend box overlaps any hub marker."""
@@ -297,8 +517,8 @@ class RenderApp:
 
     def get_legend_rect(self) -> pg.Rect:
         """Choose a legend position that avoids overlapping hub markers."""
-        width = 220
-        height = 170
+        width = 190
+        height = 220
         margin = 20
 
         candidates = [
@@ -327,16 +547,20 @@ class RenderApp:
             if not self.legend_overlaps_hubs(rect):
                 return rect
 
+        # Fall back to the first corner if every candidate overlaps.
         return candidates[0]
 
     def draw(self) -> None:
         """Render one full frame of the map."""
-        self.screen.fill((240, 240, 240))
+        if self.background is not None:
+            self.screen.blit(self.background, (0, 0))
+        else:
+            self.screen.fill((240, 240, 240))
 
         self.draw_connections()
         self.draw_hubs()
+        self.draw_zone_markers()
         self.draw_drones()
-        self.draw_hub_labels()
         self.draw_legend()
 
         # To update the entire screen
@@ -351,13 +575,3 @@ class RenderApp:
             self.clock.tick(60)
 
         pg.quit()
-
-
-def main() -> None:
-    """Create the render application and start it."""
-    app = RenderApp()
-    app.run()
-
-
-if __name__ == "__main__":
-    main()
