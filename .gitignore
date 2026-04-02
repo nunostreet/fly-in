@@ -15,3 +15,6 @@ htmlcov/
 .idea/
 fly-in.pdf
 testing.py
+docs/re.html
+docs/ee.html
+docs/ree.html
