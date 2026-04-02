@@ -3,7 +3,7 @@ MAP ?= maps/easy/01_linear_path.txt
 LINT_TARGETS = main.py parser.py models routing simulation visualization
 MYPY_TARGETS = main.py parser.py models/*.py routing/*.py simulation/*.py visualization/*.py
 
-.PHONY: install run viz debug test test-unit clean lint lint-strict
+.PHONY: install run viz debug test clean lint lint-strict
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -19,9 +19,6 @@ debug:
 
 test:
 	$(PYTHON) tests/run_map_suite.py
-
-test-unit:
-	$(PYTHON) -m unittest discover -s tests -p "test_*.py" -v
 
 clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
