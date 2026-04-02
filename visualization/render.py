@@ -33,11 +33,12 @@ class RenderApp:
         self.result = self.engine.run()
         self.snapshots = self.result.snapshots
         self.path = self.result.path
+        self.turn_tracker = self.result.turn_tracker
 
         self.is_paused = False
         self.current_turn = 0
         self.turn_progress = 0.0
-        self.turn_speed = 0.02
+        self.turn_speed = 0.012
 
         # 7. App status
         self.running = True
@@ -279,31 +280,71 @@ class RenderApp:
     def get_drone_position(
             self,
             current_drone: Drone,
-            next_drone: Drone
+            next_drone: Drone,
+            arrivals: set[int],
+            departures: set[int],
             ) -> tuple[float, float]:
         """Return the interpolated map position for one drone.
 
         The engine is the source of truth for movement. This method only
         converts two consecutive drone states into a drawable position.
         """
-        if current_drone.in_transit and current_drone.next_hub is not None:
-            # Interpolate along the active edge while the drone is moving
-            origin_name = self.path[current_drone.path_index]
-            origin_hub = self.world.hubs[origin_name]
-            target_hub = self.world.hubs[current_drone.next_hub]
-            x = (origin_hub.x +
-                 (target_hub.x - origin_hub.x) * self.turn_progress)
-            y = (origin_hub.y +
-                 (target_hub.y - origin_hub.y) * self.turn_progress)
-            return float(x), float(y)
+        if self.turn_progress < 0.5:
+            phase_progress = self.turn_progress * 2.0
+            if (
+                current_drone.id in arrivals
+                and current_drone.in_transit
+                and current_drone.next_hub is not None
+            ):
+                origin_name = current_drone.transit_origin
+                if origin_name is None:
+                    origin_name = self.path[current_drone.path_index]
+                return self._interpolate_between_hubs(
+                    origin_name,
+                    current_drone.next_hub,
+                    0.5 + phase_progress * 0.5,
+                )
+
+            if current_drone.current_hub is not None:
+                return self._hub_position(current_drone.current_hub)
+
+            if current_drone.next_hub is not None:
+                return self._hub_position(current_drone.next_hub)
+
+            return 0.0, 0.0
+
+        phase_progress = (self.turn_progress - 0.5) * 2.0
+        if (
+            current_drone.id in departures
+            and current_drone.current_hub is not None
+        ):
+            if next_drone.in_transit and next_drone.next_hub is not None:
+                return self._interpolate_between_hubs(
+                    current_drone.current_hub,
+                    next_drone.next_hub,
+                    phase_progress * 0.5,
+                )
+
+            departure_target = next_drone.current_hub
+            if departure_target is not None and departure_target != current_drone.current_hub:
+                return self._interpolate_between_hubs(
+                    current_drone.current_hub,
+                    departure_target,
+                    phase_progress,
+                )
+
+        if (
+            current_drone.current_hub is not None
+            and next_drone.current_hub is not None
+            and next_drone.current_hub == current_drone.current_hub
+            and current_drone.current_hub is not None
+        ):
+            return self._hub_position(current_drone.current_hub)
 
         if current_drone.current_hub is not None:
-            start_hub = self.world.hubs[current_drone.current_hub]
-            start_x = float(start_hub.x)
-            start_y = float(start_hub.y)
+            start_x, start_y = self._hub_position(current_drone.current_hub)
         elif current_drone.next_hub is not None:
-            target_hub = self.world.hubs[current_drone.next_hub]
-            return float(target_hub.x), float(target_hub.y)
+            return self._hub_position(current_drone.next_hub)
         else:
             return 0.0, 0.0
 
@@ -400,12 +441,39 @@ class RenderApp:
 
         current_snapshot = self.snapshots[self.current_turn]
         next_snapshot = self.snapshots[self.current_turn + 1]
+        turn_event = self.turn_tracker[self.current_turn]
+        arrivals = set(turn_event.arrivals)
+        departures = set(turn_event.departures)
 
         for current_drone, next_drone in zip(current_snapshot, next_snapshot):
             # Blend between consecutive snapshots for smoother animation
-            x, y = self.get_drone_position(current_drone, next_drone)
+            x, y = self.get_drone_position(
+                current_drone,
+                next_drone,
+                arrivals,
+                departures,
+            )
             sx, sy = self.map_to_screen(x, y)
             self.draw_drone((sx, sy))
+
+    def _interpolate_between_hubs(
+            self,
+            origin_name: str,
+            target_name: str,
+            progress: float,
+            ) -> tuple[float, float]:
+        """Return a position between two hubs."""
+        progress = max(0.0, min(1.0, progress))
+        origin_hub = self.world.hubs[origin_name]
+        target_hub = self.world.hubs[target_name]
+        x = origin_hub.x + (target_hub.x - origin_hub.x) * progress
+        y = origin_hub.y + (target_hub.y - origin_hub.y) * progress
+        return float(x), float(y)
+
+    def _hub_position(self, hub_name: str) -> tuple[float, float]:
+        """Return the map coordinates of a hub as floats."""
+        hub = self.world.hubs[hub_name]
+        return float(hub.x), float(hub.y)
 
     def draw_hub_labels(self) -> None:
         """Draw the name of each hub next to its circle."""
