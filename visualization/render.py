@@ -326,7 +326,9 @@ class RenderApp:
                 )
 
             departure_target = next_drone.current_hub
-            if departure_target is not None and departure_target != current_drone.current_hub:
+            if (
+                 departure_target is not None
+                 and departure_target != current_drone.current_hub):
                 return self._interpolate_between_hubs(
                     current_drone.current_hub,
                     departure_target,

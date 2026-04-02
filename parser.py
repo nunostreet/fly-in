@@ -43,11 +43,13 @@ class MapParser:
 
             # Ignore empty lines and comments
             stripped_line = line.strip()
-            if not stripped_line or stripped_line.startswith('#'):
+            # Ignore comments that come after information
+            content = stripped_line.split("#", 1)[0].strip()
+            if not content:
                 continue
 
             # Split the line into prefix and rest
-            prefix, _, rest = stripped_line.partition(":")
+            prefix, _, rest = content.partition(":")
 
             if prefix == "nb_drones":
                 self.parse_drones(rest.strip(), line_number, world)
@@ -294,7 +296,7 @@ class MapParser:
         """Convert a metadata block into a dictionary.
 
         Args:
-            metadata: Metadata text such as ``[color=green max_drones=4]``.
+            Metadata text in key=value format.
 
         Returns:
             A dictionary containing the parsed metadata key-value pairs.
@@ -315,14 +317,26 @@ class MapParser:
             return {}
 
         result: dict[str, str] = {}
+        forbidden_chars = {",", ";", "|", "[", "]"}
 
         for pair in content.split():
             if "=" not in pair:
                 raise ValueError(f"Invalid metadata pair: {pair}")
 
             key, value = pair.split("=", 1)
+
             if not key:
                 raise ValueError("Metadata key cannot be empty")
+            if not value:
+                raise ValueError("Metadata value cannot be empty")
+
+            if any(char in key for char in forbidden_chars):
+                raise ValueError(f"Invalid metadata key: {key}")
+            if any(char in value for char in forbidden_chars):
+                raise ValueError(f"Invalid metadata value: {value}")
+
+            if key in result:
+                raise ValueError(f"Duplicate metadata key: {key}")
 
             result[key] = value
 
@@ -364,3 +378,13 @@ class MapParser:
             raise ValueError("Start and end can't be in the same hub.")
         if not world.connections:
             raise ValueError("No connection between hubs found")
+
+        check_coords: set[tuple[int, int]] = set()
+
+        for hub in world.hubs.values():
+            coords = (hub.x, hub.y)
+            if coords in check_coords:
+                raise ValueError(
+                    f"Duplicate hub coords found for {coords}"
+                )
+            check_coords.add(coords)
