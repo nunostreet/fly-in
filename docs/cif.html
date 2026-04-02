@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capacity Info - Passo a Passo</title>
+  <style>
+    :root {
+      --bg: #f6f2ea;
+      --paper: #fffaf3;
+      --ink: #201a16;
+      --muted: #665b51;
+      --accent: #0f766e;
+      --accent-2: #9a3412;
+      --line: #ddd2c3;
+      --code-bg: #efe6d8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.65;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.10), transparent 28%),
+        radial-gradient(circle at top right, rgba(154, 52, 18, 0.08), transparent 24%),
+        linear-gradient(180deg, #faf7f1 0%, var(--bg) 100%);
+    }
+    .page {
+      width: min(980px, calc(100vw - 32px));
+      margin: 32px auto 64px;
+      display: grid;
+      gap: 22px;
+    }
+    .hero, section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 12px 28px rgba(32, 26, 22, 0.06);
+    }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 4vw, 3rem); }
+    h2 { margin: 0 0 12px; font-size: 1.55rem; }
+    h3 { margin: 18px 0 8px; font-size: 1.1rem; color: var(--accent); }
+    p, li { max-width: 78ch; }
+    .lead { color: var(--muted); font-size: 1.06rem; }
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-2);
+    }
+    code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      background: var(--code-bg);
+      padding: 0.14em 0.34em;
+      border-radius: 6px;
+      font-size: 0.95em;
+    }
+    pre {
+      margin: 14px 0;
+      padding: 16px;
+      background: #1f1b18;
+      color: #faf6ef;
+      border-radius: 16px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
+    .callout {
+      border-left: 5px solid var(--accent);
+      background: rgba(15, 118, 110, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+    .warning {
+      border-left-color: var(--accent-2);
+      background: rgba(154, 52, 18, 0.08);
+    }
+    ol, ul { padding-left: 22px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <p class="eyebrow">Fly-in Study Notes</p>
+      <h1>Como reconstruir o <code>--capacity-info</code></h1>
+      <p class="lead">
+        Este guia é para fazeres a feature de memória durante a avaliação. A ideia é manter tudo simples:
+        a flag só acrescenta linhas extra ao output normal, uma para hubs e outra para connections.
+      </p>
+    </section>
+
+    <section>
+      <h2>Objetivo Mental</h2>
+      <div class="callout">
+        <strong>Regra simples:</strong> no fim de cada turno, imprimir:
+        <br>
+        1. ocupação de hubs usando <code>drone.current_hub</code>
+        <br>
+        2. uso de connections usando o <code>link_usage</code> desse turno
+      </div>
+      <p>Não precisas de mexer na lógica da simulação. Só estás a aproveitar estado que já existe.</p>
+    </section>
+
+    <section>
+      <h2>Passo 1: Adicionar a Flag em <code>main.py</code></h2>
+      <p>Acrescenta a flag no <code>argparse</code>:</p>
+      <pre><code>parser.add_argument("--capacity-info", action="store_true")</code></pre>
+      <p>Depois passa esse valor ao engine:</p>
+      <pre><code>result = SimulationEngine(world, args.capacity_info).run()</code></pre>
+    </section>
+
+    <section>
+      <h2>Passo 2: Guardar a Flag no Engine</h2>
+      <p>Em <code>SimulationEngine.__init__</code>, muda a assinatura:</p>
+      <pre><code>def __init__(self, world: World, capacity_info: bool = False) -&gt; None:</code></pre>
+      <p>E guarda a flag:</p>
+      <pre><code>self._capacity_info = capacity_info</code></pre>
+      <div class="callout warning">
+        Usa <code>False</code> por omissão para não partir o render, que normalmente cria
+        <code>SimulationEngine(world)</code>.
+      </div>
+    </section>
+
+    <section>
+      <h2>Passo 3: Aproveitar o <code>link_usage</code> do Turno</h2>
+      <p>No teu <code>_run_turn()</code>, já existe:</p>
+      <pre><code>link_usage: dict[tuple[str, str], int] = {}</code></pre>
+      <p>Isso já é exatamente o que precisas para as connections.</p>
+      <p>Então, no fim de <code>_run_turn()</code>, devolve também uma cópia:</p>
+      <pre><code>return moves, made_progress, TurnTracker(...), link_usage.copy()</code></pre>
+      <p>E ajusta a assinatura da função para refletir esse quarto valor.</p>
+    </section>
+
+    <section>
+      <h2>Passo 4: Receber o <code>link_usage</code> no <code>run()</code></h2>
+      <p>Onde chamas <code>_run_turn()</code>, passa a receber quatro valores:</p>
+      <pre><code>turn_moves, made_progress, turn_arr_or_dep, link_usage = self._run_turn(
+    drones, path
+)</code></pre>
+    </section>
+
+    <section>
+      <h2>Passo 5: Acrescentar as Linhas Extra Só Quando a Flag Está Ativa</h2>
+      <p>No bloco onde hoje fazes:</p>
+      <pre><code>lines.append(" ".join(turn_moves))</code></pre>
+      <p>acrescenta:</p>
+      <pre><code>if self._capacity_info:
+    lines.extend(self._add_capacity_info(drones, link_usage))</code></pre>
+      <p>Uso <code>extend</code> porque a helper vai devolver duas linhas.</p>
+    </section>
+
+    <section>
+      <h2>Passo 6: Criar a Helper <code>_add_capacity_info(...)</code></h2>
+      <p>A helper recebe:</p>
+      <ul>
+        <li><code>drones</code> para calcular hubs</li>
+        <li><code>link_usage</code> para calcular connections</li>
+      </ul>
+      <p>Estrutura recomendada:</p>
+      <pre><code>def _add_capacity_info(
+        self,
+        drones: list[Drone],
+        link_usage: dict[tuple[str, str], int],
+        ) -&gt; list[str]:
+    hub_info: list[str] = []
+    for hub_name in self._world.hubs:
+        used_capacity = sum(
+            1 for drone in drones if drone.current_hub == hub_name
+        )
+        max_capacity = self._hub_capacity(hub_name)
+        hub_info.append(f"{hub_name}: {used_capacity}/{max_capacity} ")
+
+    connection_info: list[str] = []
+    for connection in self._world.connections:
+        key = self._connection_key(connection.source, connection.target)
+        used_capacity = link_usage.get(key, 0)
+        connection_info.append(
+            f"{connection.source}-{connection.target}: "
+            f"{used_capacity}/{connection.max_link_capacity} "
+        )
+
+    return ["".join(hub_info), "".join(connection_info)]</code></pre>
+    </section>
+
+    <section>
+      <h2>Passo 7: Porque Esta Solução É Fácil de Defender</h2>
+      <h3>Hubs</h3>
+      <p>
+        “A ocupação do hub é calculada vendo onde cada drone acabou o turno.”
+      </p>
+      <h3>Connections</h3>
+      <p>
+        “O uso da connection vem diretamente do contador <code>link_usage</code> do turno.”
+      </p>
+      <h3>Vantagem</h3>
+      <p>
+        Não precisas de criar estado artificial. Só reaproveitas dados que já existem na simulação.
+      </p>
+    </section>
+
+    <section>
+      <h2>Checklist Rápida</h2>
+      <ol>
+        <li>Adicionar <code>--capacity-info</code> em <code>main.py</code>.</li>
+        <li>Passar a flag para <code>SimulationEngine(world, args.capacity_info)</code>.</li>
+        <li>Guardar <code>self._capacity_info</code> no construtor.</li>
+        <li>Fazer <code>_run_turn()</code> devolver também <code>link_usage.copy()</code>.</li>
+        <li>Receber esse valor no <code>run()</code>.</li>
+        <li>Chamar <code>_add_capacity_info(drones, link_usage)</code> quando a flag está ativa.</li>
+        <li>Criar uma linha para hubs e uma linha para connections.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Teste Final</h2>
+      <pre><code>python3 main.py maps/test/testing_restricted.txt --capacity-info</code></pre>
+      <p>Se estiver tudo bem, por turno deves ver:</p>
+      <ul>
+        <li>uma linha normal de movimentos</li>
+        <li>uma linha com hubs</li>
+        <li>uma linha com connections</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

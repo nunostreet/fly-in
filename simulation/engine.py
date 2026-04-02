@@ -128,8 +128,7 @@ class SimulationEngine:
 
         Drones that were already traveling to a restricted hub are resolved
         first. After that, drones that are idle may attempt to start a new
-        movement. The returned strings are joined into the output line for the
-        current turn.
+        movement.
         """
 
         moves: list[str] = []
@@ -187,20 +186,12 @@ class SimulationEngine:
             self,
             drone: Drone,
             path: list[str],
-            link_usage: dict[tuple[str, str], int]
+            link_usage: dict[tuple[str, str], int],
             ) -> tuple[str | None, bool]:
         """Try to start moving a single drone toward the next hub in the path.
 
-        The ``path_index`` points to the drone's current position in the
-        shared path. A drone may be forced to wait if the next hub is already
-        full or if the connection has no remaining capacity in the current
-        turn. Entering a restricted hub begins a movement that only completes
-        in the following turn.
-
         Returns:
-            A formatted move like ``D1-junction`` when the drone arrives at a
-            hub in the current turn, or ``None`` when no completed arrival is
-            produced.
+            A formatted move or None.
         """
 
         # 1. Check if we reached the end
