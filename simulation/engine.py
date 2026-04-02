@@ -7,23 +7,27 @@ from typing import List
 
 
 @dataclass
-class SimulationResult:
-    """Store the simulation output in turn-by-turn text form."""
+class TurnTracker:
+    """Keeping track of arrivals/departures for rendering purposes."""
+    arrivals: list[int]
+    departures: list[int]
 
+
+@dataclass
+class SimulationResult:
+    """Store the simulation output."""
     turns: int
     lines: list[str]
     snapshots: list[list[Drone]]
     path: list[str]
+    turn_tracker: list[TurnTracker]
 
 
 class SimulationEngine:
     """Run a simple multi-drone simulation over a routed path.
 
-    The engine currently makes every drone follow the same path returned by
-    the router. It tracks hub occupancy across turns and link usage within a
-    single turn so that hub and connection capacities can block movement.
-    Moving into a restricted hub takes an extra turn, so drones may be marked
-    as in transit between turns before they arrive at the destination hub.
+    This is a single-path solution which takes into account hub occupancy,
+    link capacity and zone restrictions.
     """
 
     def __init__(self, world: World) -> None:
@@ -42,7 +46,7 @@ class SimulationEngine:
         """Simulate drone movement until every drone reaches the goal.
 
         Returns:
-            A ``SimulationResult`` containing the number of turns and the
+            SimulationResult, containing the number of turns and the
             formatted movement lines for each turn.
         """
 
@@ -55,11 +59,15 @@ class SimulationEngine:
         snapshots: list[list[Drone]] = []
         lines: list[str] = []
         turns = 0
+        turn_track: list[TurnTracker] = []
 
         snapshots.append(self._snapshot_drones(drones))
         while not self._all_finished(drones):
-            turn_moves, made_progress = self._run_turn(drones, path)
+            turn_moves, made_progress, turn_arr_or_dep = self._run_turn(
+                drones, path
+            )
             snapshots.append(self._snapshot_drones(drones))
+            turn_track.append(turn_arr_or_dep)
 
             if turn_moves:
                 lines.append(" ".join(turn_moves))
@@ -74,8 +82,9 @@ class SimulationEngine:
             turns=turns,
             lines=lines,
             snapshots=snapshots,
-            path=path
-            )
+            path=path,
+            turn_tracker=turn_track,
+        )
 
     def _init_drones(self) -> List[Drone]:
         """Create one drone instance per configured drone in the world.
@@ -114,7 +123,7 @@ class SimulationEngine:
 
     def _run_turn(
             self, drones: list[Drone], path: list[str]
-            ) -> tuple[List[str], bool]:
+            ) -> tuple[List[str], bool, TurnTracker]:
         """Advance the simulation by one turn.
 
         Drones that were already traveling to a restricted hub are resolved
@@ -124,33 +133,38 @@ class SimulationEngine:
         """
 
         moves: list[str] = []
+        arrivals: list[int] = []
+        departures: list[int] = []
         made_progress = False
 
         # Track how many drones have already used each connection this turn.
         link_usage: dict[tuple[str, str], int] = {}
 
-        # Track which drones have been moved that were in transit
+        # Drones that already arrived from restricted transit do not move again
+        # in the same turn.
         processed_ids: set[int] = set()
 
         # 1. We prioritise drones that were already in transit
         for drone in drones:
-            if not drone.in_transit:
-                continue
-
-            if drone.next_hub is None:
+            if not drone.in_transit or drone.next_hub is None:
                 continue
 
             next_hub_name = drone.next_hub
             drone.current_hub = next_hub_name
             drone.next_hub = None
+            drone.transit_origin = None
             drone.in_transit = False
             drone.path_index += 1
-            self._hub_occupancy[next_hub_name] += 1
+            drone.waiting = False
+            if self._world.hubs[next_hub_name].zone != ZoneType.RESTRICTED:
+                self._hub_occupancy[next_hub_name] += 1
+
             made_progress = True
 
             if drone.path_index == len(path) - 1:
                 drone.finished = True
 
+            arrivals.append(drone.id)
             moves.append(f"D{drone.id}-{next_hub_name}")
             processed_ids.add(drone.id)
 
@@ -161,9 +175,13 @@ class SimulationEngine:
             move, progressed = self._move_drone(drone, path, link_usage)
             made_progress = made_progress or progressed
             if move is not None:
+                departures.append(drone.id)
                 moves.append(move)
 
-        return moves, made_progress
+        return moves, made_progress, TurnTracker(
+            arrivals=arrivals,
+            departures=departures,
+        )
 
     def _move_drone(
             self,
@@ -221,13 +239,14 @@ class SimulationEngine:
             drone.waiting = True
             return None, False
 
-        self._hub_occupancy[current_hub_name] -= 1
+        if self._world.hubs[current_hub_name].zone != ZoneType.RESTRICTED:
+            self._hub_occupancy[current_hub_name] -= 1
         link_usage[link_key] = used_this_turn + 1
 
-        is_onstandby = not drone.in_transit
-        if next_hub.zone == ZoneType.RESTRICTED and is_onstandby:
+        if next_hub.zone == ZoneType.RESTRICTED:
             drone.current_hub = None
             drone.next_hub = next_hub_name
+            drone.transit_origin = current_hub_name
             drone.in_transit = True
             drone.waiting = False
             connection_name = self._connection_name(
@@ -249,33 +268,15 @@ class SimulationEngine:
     @staticmethod
     def _connection_key(origin: str, destiny: str) -> tuple[str, str]:
         """Return a normalized key for undirected connection comparison.
-
-        Args:
-            origin: Name of the source hub.
-            destiny: Name of the destination hub.
-
-        Returns:
-            A sorted tuple that treats ``A-B`` and ``B-A`` as the same
-            connection.
         """
         first, second = sorted((origin, destiny))
         return first, second
 
     def _connection_name(self, origin: str, destiny: str) -> str:
-        """Return a string indicating the drone movement.
-
-        Args:
-            origin: Name of the source hub.
-            destiny: Name of the destination hub.
-        """
         return f"{origin}-{destiny}"
 
     def _hub_capacity(self, hub_name: str) -> int:
-        """Return the effective capacity for a hub during simulation.
-
-        The start and end hubs may hold all drones, while every other hub
-        uses the capacity declared in the parsed map.
-        """
+        """Return the capacity for a hub during simulation."""
         if (
             hub_name == self._world.start_hub_name
             or hub_name == self._world.end_hub_name
@@ -285,8 +286,6 @@ class SimulationEngine:
         return self._world.hubs[hub_name].max_drones
 
     def _all_finished(self, drones: list[Drone]) -> bool:
-        """Return ``True`` when every drone has reached the final hub."""
-
         return all(drone.finished for drone in drones)
 
     def _snapshot_drones(self, drones: list[Drone]) -> list[Drone]:

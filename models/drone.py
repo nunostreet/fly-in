@@ -12,6 +12,7 @@ class Drone():
             the drone is still at the start hub.
         next_hub: Name of the hub the drone is currently traveling toward, if
             any.
+        transit_origin: Name of the hub the drone is travelling from
         waiting: Whether the drone is blocked in the current turn because the
             destination hub or connecting edge is full.
         in_transit: Whether the drone is currently between hubs because a
@@ -22,6 +23,7 @@ class Drone():
     id: int = 1
     current_hub: str | None = None
     next_hub: str | None = None
+    transit_origin: str | None = None
     path_index: int = 0
     waiting: bool = False
     in_transit: bool = False
